@@ -740,7 +740,7 @@ static void gl_capture(HDC hdc)
 			gl_init(hdc);
 		}
 	}
-	if (capture_ready() && hdc == data.hdc) {
+	if ((capture_fps_synchronize() || capture_ready()) && hdc == data.hdc) {
 		uint32_t new_cx;
 		uint32_t new_cy;
 
@@ -890,11 +890,13 @@ bool hook_gl(void)
 			  hook_wgl_swap_layer_buffers, "wglSwapLayerBuffers");
 		rehook(&wgl_swap_layer_buffers);
 	}
+	/*
 	if (wgl_sb_proc) {
 		hook_init(&wgl_swap_buffers, wgl_sb_proc, hook_wgl_swap_buffers,
 			  "wglSwapBuffers");
 		rehook(&wgl_swap_buffers);
 	}
+	*/
 
 	rehook(&swap_buffers);
 

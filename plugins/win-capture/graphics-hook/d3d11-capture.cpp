@@ -349,7 +349,8 @@ void d3d11_capture(void *swap_ptr, void *backbuffer_ptr, bool)
 	if (capture_should_init()) {
 		d3d11_init(swap);
 	}
-	if (capture_ready()) {
+
+	if (capture_fps_synchronize() || capture_ready()) {
 		ID3D11Resource *backbuffer;
 
 		hr = dxgi_backbuffer->QueryInterface(__uuidof(ID3D11Resource),

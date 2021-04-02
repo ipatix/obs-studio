@@ -1195,7 +1195,7 @@ static void vk_capture(struct vk_data *data, VkQueue queue,
 			flog("vk_shtex_init failed");
 		}
 	}
-	if (capture_ready()) {
+	if (capture_fps_synchronize() || capture_ready()) {
 		if (swap != data->cur_swap) {
 			vk_shtex_free(data);
 			return;

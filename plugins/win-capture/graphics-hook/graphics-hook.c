@@ -34,6 +34,7 @@ HANDLE signal_stop = NULL;
 HANDLE signal_ready = NULL;
 HANDLE signal_exit = NULL;
 static HANDLE signal_init = NULL;
+HANDLE signal_fps_sync = NULL;
 HANDLE tex_mutexes[2] = {NULL, NULL};
 static HANDLE filemap_hook_info = NULL;
 
@@ -118,6 +119,11 @@ static inline bool init_signals(void)
 
 	signal_init = init_event(EVENT_HOOK_INIT, pid);
 	if (!signal_init) {
+		return false;
+	}
+
+	signal_fps_sync = init_event(EVENT_HOOK_FPS_SYNC, pid);
+	if (!signal_fps_sync) {
 		return false;
 	}
 
@@ -278,6 +284,7 @@ static void free_hook(void)
 	close_handle(&signal_ready);
 	close_handle(&signal_stop);
 	close_handle(&signal_restart);
+	close_handle(&signal_fps_sync);
 	close_handle(&dup_hook_mutex);
 	ipc_pipe_client_free(&pipe);
 }

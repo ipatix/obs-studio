@@ -16,6 +16,8 @@
 
 #define EVENT_HOOK_INIT L"CaptureHook_Initialize"
 
+#define EVENT_HOOK_FPS_SYNC L"CaptureHook_FPSSync"
+
 #define WINDOW_HOOK_KEEPALIVE L"CaptureHook_KeepAlive"
 
 #define MUTEX_TEXTURE1 L"CaptureHook_TextureMutex1"
@@ -115,11 +117,13 @@ struct hook_info {
 	bool force_shmem;
 	bool capture_overlay;
 	bool allow_srgb_alias;
+	bool sync_fps_to_obs;
+	int sync_fps_timeout;
 
 	/* hook addresses */
 	struct graphics_offsets offsets;
 
-	uint32_t reserved[126];
+	uint32_t reserved[124];
 };
 static_assert(sizeof(struct hook_info) == 648, "ABI compatibility");
 

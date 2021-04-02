@@ -39,6 +39,8 @@
 #define SETTING_ANTI_CHEAT_HOOK      "anti_cheat_hook"
 #define SETTING_D3D12_USE_SWAP_QUEUE "d3d12_use_swap_queue"
 #define SETTING_HOOK_RATE            "hook_rate"
+#define SETTING_SYNC_FPS_TO_OBS      "sync_fps_to_obs"
+#define SETTING_SYNC_FPS_TIMEOUT     "sync_fps_timeout"
 
 /* deprecated */
 #define SETTING_ANY_FULLSCREEN   "capture_any_fullscreen"
@@ -71,6 +73,8 @@
 #define TEXT_HOOK_RATE_FASTEST   obs_module_text("GameCapture.HookRate.Fastest")
 #define TEXT_D3D12_SWAP_QUEUE    obs_module_text("GameCapture.D3D12UseSwapQueue")
 #define TEXT_D3D12_SWAP_QUEUE_LONG obs_module_text("GameCapture.D3D12UseSwapQueue.Long")
+#define TEXT_SYNC_FPS_TO_OBS      obs_module_text("GameCapture.SyncFpsToObs")
+#define TEXT_SYNC_FPS_TIMEOUT     obs_module_text("GameCapture.SyncFpsTimeout")
 
 #define TEXT_MODE_ANY            TEXT_ANY_FULLSCREEN
 #define TEXT_MODE_WINDOW         obs_module_text("GameCapture.CaptureWindow")
@@ -111,6 +115,8 @@ struct game_capture_config {
 	bool anticheat_hook;
 	bool d3d12_use_swap_queue;
 	enum hook_rate hook_rate;
+	bool sync_fps_to_obs;
+	int sync_fps_timeout;
 };
 
 struct game_capture {
@@ -161,6 +167,7 @@ struct game_capture {
 	HANDLE hook_stop;
 	HANDLE hook_ready;
 	HANDLE hook_exit;
+	HANDLE hook_fps_sync;
 	HANDLE hook_data_map;
 	HANDLE global_hook_info_map;
 	HANDLE target_process;
@@ -329,6 +336,7 @@ static void stop_capture(struct game_capture *gc)
 	close_handle(&gc->hook_ready);
 	close_handle(&gc->hook_exit);
 	close_handle(&gc->hook_init);
+	close_handle(&gc->hook_fps_sync);
 	close_handle(&gc->hook_data_map);
 	close_handle(&gc->keepalive_mutex);
 	close_handle(&gc->global_hook_info_map);
@@ -426,6 +434,10 @@ static inline void get_config(struct game_capture_config *cfg,
 		obs_data_get_bool(settings, SETTING_D3D12_USE_SWAP_QUEUE);
 	cfg->hook_rate =
 		(enum hook_rate)obs_data_get_int(settings, SETTING_HOOK_RATE);
+	cfg->sync_fps_to_obs =
+		obs_data_get_bool(settings, SETTING_SYNC_FPS_TO_OBS);
+	cfg->sync_fps_timeout =
+		obs_data_get_int(settings, SETTING_SYNC_FPS_TIMEOUT);
 }
 
 static inline int s_cmp(const char *str1, const char *str2)
@@ -543,6 +555,14 @@ static void game_capture_update(void *data, obs_data_t *settings)
 		}
 	} else {
 		gc->initial_config = false;
+	}
+
+	if (gc->global_hook_info) {
+		gc->global_hook_info->sync_fps_to_obs =
+			gc->config.sync_fps_to_obs;
+		/* do not allow negative timeout */
+		gc->global_hook_info->sync_fps_timeout =
+			max(0, gc->config.sync_fps_timeout);
 	}
 }
 
@@ -756,6 +776,8 @@ static inline bool init_hook_info(struct game_capture *gc)
 	gc->global_hook_info->allow_srgb_alias = true;
 	gc->global_hook_info->d3d12_use_swap_queue =
 		gc->config.d3d12_use_swap_queue;
+	gc->global_hook_info->sync_fps_to_obs = gc->config.sync_fps_to_obs;
+	gc->global_hook_info->sync_fps_timeout = gc->config.sync_fps_timeout;
 	reset_frame_interval(gc);
 
 	obs_enter_graphics();
@@ -1211,6 +1233,15 @@ static inline bool init_events(struct game_capture *gc)
 		gc->hook_exit = open_event_gc(gc, EVENT_HOOK_EXIT);
 		if (!gc->hook_exit) {
 			warn("init_events: failed to get hook_exit event: %lu",
+			     GetLastError());
+			return false;
+		}
+	}
+
+	if (!gc->hook_fps_sync) {
+		gc->hook_fps_sync = open_event_gc(gc, EVENT_HOOK_FPS_SYNC);
+		if (!gc->hook_fps_sync) {
+			warn("init_events: failed to get hook_fps_sync event: %lu",
 			     GetLastError());
 			return false;
 		}
@@ -1793,6 +1824,10 @@ static void game_capture_tick(void *data, float seconds)
 
 	if (!gc->showing)
 		gc->showing = true;
+
+	if (gc->config.sync_fps_to_obs) {
+		SetEvent(gc->hook_fps_sync);
+	}
 }
 
 static inline void game_capture_render_cursor(struct game_capture *gc)
@@ -1880,6 +1915,8 @@ static void game_capture_defaults(obs_data_t *settings)
 	obs_data_set_default_bool(settings, SETTING_D3D12_USE_SWAP_QUEUE, true);
 	obs_data_set_default_int(settings, SETTING_HOOK_RATE,
 				 (int)HOOK_RATE_NORMAL);
+	obs_data_set_default_bool(settings, SETTING_SYNC_FPS_TO_OBS, false);
+	obs_data_set_default_int(settings, SETTING_SYNC_FPS_TIMEOUT, 50);
 }
 
 static bool mode_callback(obs_properties_t *ppts, obs_property_t *p,
@@ -2072,6 +2109,11 @@ static obs_properties_t *game_capture_properties(void *data)
 	obs_property_list_add_int(p, TEXT_HOOK_RATE_NORMAL, HOOK_RATE_NORMAL);
 	obs_property_list_add_int(p, TEXT_HOOK_RATE_FAST, HOOK_RATE_FAST);
 	obs_property_list_add_int(p, TEXT_HOOK_RATE_FASTEST, HOOK_RATE_FASTEST);
+
+	obs_properties_add_bool(ppts, SETTING_SYNC_FPS_TO_OBS,
+				TEXT_SYNC_FPS_TO_OBS);
+	obs_properties_add_int_slider(ppts, SETTING_SYNC_FPS_TIMEOUT,
+				      TEXT_SYNC_FPS_TIMEOUT, 0, 300, 1);
 
 	UNUSED_PARAMETER(data);
 	return ppts;

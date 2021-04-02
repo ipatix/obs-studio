@@ -99,6 +99,7 @@ extern HANDLE signal_restart;
 extern HANDLE signal_stop;
 extern HANDLE signal_ready;
 extern HANDLE signal_exit;
+extern HANDLE signal_fps_sync;
 extern HANDLE tex_mutexes[2];
 extern char system_path[MAX_PATH];
 extern char process_name[MAX_PATH];
@@ -214,6 +215,21 @@ static inline bool capture_should_stop(void)
 	}
 
 	return stop_requested;
+}
+
+static inline bool capture_fps_synchronize(void) {
+	/* synchronize with obs framerate if enabled */
+	if (capture_active() && global_hook_info &&
+	    global_hook_info->sync_fps_to_obs) {
+		DWORD r = WaitForSingleObject(
+			signal_fps_sync,
+			(DWORD)global_hook_info->sync_fps_timeout);
+		if (r != WAIT_OBJECT_0) {
+			return false;
+		}
+		return true;
+	}
+	return false;
 }
 
 extern bool init_pipe(void);
